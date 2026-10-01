@@ -89,6 +89,11 @@ def make_handler(service: Service, static_dir: str):
                     actor, role = self._identity()
                     del actor
                     self._json(200, {"records": service.list_records(item_id, role)})
+                elif path.startswith("/api/items/") and path.endswith("/drafts"):
+                    item_id = int(path.split("/")[3])
+                    actor, role = self._identity()
+                    del actor
+                    self._json(200, {"drafts": service.list_drafts(item_id, role)})
                 elif path.startswith("/api/items/"):
                     item_id = int(path.rsplit("/", 1)[-1])
                     actor, role = self._identity()
@@ -98,6 +103,15 @@ def make_handler(service: Service, static_dir: str):
                     actor, role = self._identity()
                     del actor
                     self._json(200, {"events": service.audit(role)})
+                elif path == "/api/adjudication":
+                    actor, role = self._identity()
+                    del actor
+                    self._json(200, {"cases": service.list_adjudication(role)})
+                elif path.startswith("/api/intake/batches/"):
+                    batch_no = path.split("/")[4]
+                    actor, role = self._identity()
+                    del actor
+                    self._json(200, service.get_intake_batch(batch_no, role))
                 else:
                     self._json(404, {"error": "not_found"})
             except Exception as exc:
@@ -119,6 +133,21 @@ def make_handler(service: Service, static_dir: str):
                     expected = body.get("expected_version")
                     self._json(200, service.transition(
                         item_id, target, expected, actor, role))
+                elif path.startswith("/api/items/") and path.endswith("/apply"):
+                    parts = path.split("/")
+                    item_id = int(parts[3])
+                    draft_id = int(parts[5])
+                    self._json(200, service.apply_draft(item_id, draft_id, actor, role))
+                elif path == "/api/intake/batches":
+                    self._json(201, service.open_intake_batch(body, actor, role))
+                elif path.startswith("/api/intake/batches/") and path.endswith("/shards"):
+                    batch_no = path.split("/")[4]
+                    self._json(200, service.add_intake_shard(batch_no, body, actor, role))
+                elif path.startswith("/api/intake/batches/") and path.endswith("/commit"):
+                    batch_no = path.split("/")[4]
+                    self._json(200, service.commit_intake_batch(batch_no, actor, role))
+                elif path == "/api/admin/baseline":
+                    self._json(200, service.backfill_baseline(actor, role))
                 else:
                     self._json(404, {"error": "not_found"})
             except Exception as exc:

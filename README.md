@@ -30,9 +30,29 @@ python3 app.py --db ./data.db --port 8320
 - `GET /api/items/{id}`
 - `POST /api/items/{id}/records`
 - `POST /api/items/{id}/transition`，必须提交`expected_version`
+- `GET /api/items/{id}/drafts`
+- `POST /api/items/{id}/drafts/{draft_id}/apply`
 - `GET /api/audit`
+- `GET /api/adjudication`
+- `POST /api/admin/baseline`
+- `POST /api/intake/batches`
+- `GET /api/intake/batches/{batch_no}`
+- `POST /api/intake/batches/{batch_no}/shards`
+- `POST /api/intake/batches/{batch_no}/commit`
 
 允许角色：observer, response_commander, operations, viewer。估算油量、海况和未完成任务数影响响应等级；关闭前必须完成回收和岸线监测记录。
+
+## 收件批次与可恢复上报
+
+船载、无人机、岸站重复上报或断网补传时，事件、记录和审计按`batch_no`接入同一收件批次：
+
+- **分片入库，续传幂等**：批次按`shard_no`分片提交，中断后用原批次号续传；同一分片重试只返回首次结果，不重复落库。
+- **同编号采最早快照**：`external_ref`相同且内容一致时保留最早一条，不重复创建。
+- **内容不同留待裁**：同编号但等级、油量等内容不一致时，生成裁决案例（`/api/adjudication`），不覆盖原事件。
+- **已确认数量不可覆盖**：事件进入`containing`后数量即确认，后续上报油量冲突时标记为`confirmed_quantity_conflict`。
+- **监测变化退回复核**：监测记录油量远超阈值，导致等级、期限或关闭结论失效时，事件自动退回`assessing`并记录审计。
+- **并发推进保留草稿**：两人同时推进只接受当前版本，版本不符的后到请求保留为草稿，可在草稿上继续。
+- **历史基线**：缺少批次号的旧事件通过`/api/admin/baseline`升级到`BASELINE-LEGACY`基线批次，幂等执行。
 
 ## 测试
 
